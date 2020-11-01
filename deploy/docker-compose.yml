@@ -1,0 +1,67 @@
+version: "3.7"
+
+services:
+  server:
+    image: iskorotkov/chaos-server:latest
+    command: ["-port", "8811"]
+    hostname: server
+    deploy:
+      restart_policy:
+        delay: 5s
+        max_attempts: 5
+    networks:
+      - private
+
+  writer:
+    image: iskorotkov/chaos-client:latest
+    depends_on:
+      - server
+      - toxiproxy
+    networks:
+      - public
+    deploy:
+      replicas: 3
+      restart_policy:
+        delay: 5s
+        max_attempts: 5
+    command: ["-host", "toxiproxy", "-port", "18811", "-verb", "post", "-rate", "1"]
+
+  reader:
+    image: iskorotkov/chaos-client:latest
+    depends_on:
+      - server
+      - toxiproxy
+    networks:
+      - public
+    deploy:
+      restart_policy:
+        delay: 5s
+        max_attempts: 5
+    command: ["-host", "toxiproxy", "-port", "18811", "-verb", "get", "-rate", "1"]
+
+  toxiproxy:
+    image: shopify/toxiproxy:2.1.4
+    hostname: toxiproxy
+    networks:
+      - public
+      - private
+
+  backend:
+    image: iskorotkov/chaos-backend-toxiproxy:latest
+    hostname: backend
+    depends_on:
+      - toxiproxy
+      - server
+    networks:
+      - private
+    deploy:
+      restart_policy:
+        delay: 5s
+        max_attempts: 5
+    command: ["-tp_host", "toxiproxy", "-host", "server", "-listen", "18811", "-upstream", "8811"]
+
+networks:
+  public:
+    driver: overlay
+  private:
+    driver: overlay
